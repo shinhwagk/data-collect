@@ -1,0 +1,8 @@
+[
+  {
+    "alias": "target",
+    "jdbc": "10.65.103.59:1521/TEST",
+    "user": "summary",
+    "password": "summary"
+  }
+]
