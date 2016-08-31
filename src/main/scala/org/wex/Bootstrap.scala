@@ -1,60 +1,45 @@
 package org.wex
 
-import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
-
+import java.sql.Connection
+import akka.stream.ActorAttributes.supervisionStrategy
+import akka.stream.OverflowStrategy
+import akka.stream.Supervision.resumingDecider
 import akka.stream.scaladsl.{Sink, Source}
-import akka.stream.{ActorAttributes, OverflowStrategy, Supervision}
-import org.apache.logging.log4j.{LogManager, Logger}
+import org.apache.logging.log4j.LogManager
 import org.wex.services.{CommonServices, ConfigureRunning, ConfigureServices}
-
-import scala.collection.immutable.IndexedSeq
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-import ActorAttributes.supervisionStrategy
-import akka.stream.Supervision.resumingDecider
 
 /**
   * Created by zhangxu on 2016/8/10.
   */
 object Bootstrap extends App {
 
-  var num = 0
-
   import org.wex.services.ActorSystemServices._
+  import org.wex.services.DatabaseServices._
 
   val log = LogManager.getLogger(this.getClass.getName);
 
-  def funcColumns(sourceConn: Connection, sql: String): (Statement, IndexedSeq[String]) = {
-    val preStmt = sourceConn.prepareStatement(sql)
-    val meta = preStmt.getMetaData
-    (preStmt, (1 to meta.getColumnCount).map(meta.getColumnName(_)))
-  }
-
-  def funcResultSetIterator(sourceConn: Connection, sql: String, cols: Seq[String]): Stream[Map[String, Object]] = {
+  def funcResultSetIterator(sourceConn: Connection, sql: String, cols: Seq[String]) = {
     val stmt = sourceConn.createStatement()
-    QueryIterator(stmt.executeQuery(sql), cols).toStream
-  }
-
-  def sqltemplate(cols: Seq[String], sql: String, targetTable: String): String = {
-    val size = cols.size
-    s"INSERT INTO ${targetTable}(${cols.reverse.mkString(",")}) VALUES " + (1 to size).map(_ => "?").mkString("(", ",", ")")
+    generateQueryIterator(stmt.executeQuery(sql), cols)
   }
 
   val _LoadTODatabase = (cr: ConfigureRunning) => Future {
     val sourceConn: Connection = CommonServices.createOracleConnection(cr.sourcedb)
     val targetConn: Connection = CommonServices.createOracleConnection(cr.targetdb)
 
-    val (stmt, cols) = funcColumns(sourceConn, cr.sql)
+    val (stmt, cols) = getColumnListBySql(sourceConn, cr.sql)
     stmt.close()
 
-    val insertSql = sqltemplate(cols, cr.sql, cr.table)
+    val insertSql = insertSqlTemplate(cols, cr.table)
 
-    val stmt2: PreparedStatement = targetConn.prepareStatement(insertSql)
+    val queryIteratorStream = funcResultSetIterator(sourceConn, cr.sql, cols).toStream
 
-    val queryIterator: Stream[Map[String, Object]] = funcResultSetIterator(sourceConn, cr.sql, cols)
+    val stmt2 = targetConn.prepareStatement(insertSql)
 
-    Source(queryIterator)
+    Source(queryIteratorStream)
       .map { rs =>
         val nrs = rs.toArray
         (1 to nrs.size).foreach(cnt => stmt2.setObject(cnt, nrs(cnt - 1)._2))
@@ -63,24 +48,34 @@ object Bootstrap extends App {
       }
       .runWith(Sink.ignore)
       .onComplete {
-        case Success(_) => sourceConn.close(); targetConn.close(); log.info("task: " + cr.name + ". Success")
-        case Failure(ex) => sourceConn.close(); targetConn.close(); log.error("task: " + cr.name + s". Failure. error:${ex.getMessage}")
+        case Success(_) =>
+          closeOracleConnection(sourceConn)
+          closeOracleConnection(targetConn)
+          log.info("task: " + cr.name + ". Success")
+        case Failure(ex) =>
+          closeOracleConnection(sourceConn)
+          closeOracleConnection(targetConn)
+          log.error("task: " + cr.name + s". Failure. error:${ex.getMessage}")
       }
   }
 
-  Source.tick(0.seconds, 3.seconds, ())
+  Source.tick(0.seconds, 1.minutes, ())
     .map { p => log.info("query executable task"); p }
-    .map { _ => ConfigureServices._exec_list }.withAttributes(ActorAttributes.supervisionStrategy(decider2(log)))
-    .filter(_.size > 0)
-    .mapConcat(f => f).async.buffer(500, OverflowStrategy.backpressure)
-    .map { p => log.info(s"exec task: ${p.name}"); p }
+    .map(_ => ConfigureServices._conf_collect_list).withAttributes(supervisionStrategy(decider2(log)))
+    .mapConcat(ccl => ccl)
+    .filter(ccl => CommonServices.timerFilter(ccl.timer))
+    .filter(ccl => ccl.status == 0)
+    .map { ccl => log.info(s"exec task ${ccl.name}"); ccl }
+    .map(ccl => ConfigureServices._generateConfigureRunningBySourcedb(ccl)).withAttributes(supervisionStrategy(decider2(log)))
+    .mapConcat(c => c).async.buffer(20, OverflowStrategy.backpressure)
+    .map { c => log.info(s"exec task ${c.name} on ${c.sourcedb.jdbc}/${c.sourcedb.user} -> ${c.targetdb.jdbc}/${c.targetdb.user}.${c.table} "); c }
     .mapAsync(ConfigureServices.cpus)(_LoadTODatabase(_)).withAttributes(supervisionStrategy(resumingDecider))
     .runWith(Sink.ignore)
+    .onComplete {
+      case Success(_) => log.info("data collect success")
+      case Failure(ex) => log.error("data collect failure")
+    }
+
 }
 
-case class QueryIterator(val rs: ResultSet, cols: Seq[String]) extends Iterator[Map[String, Object]] {
 
-  override def hasNext: Boolean = rs.next()
-
-  override def next(): Map[String, Object] = cols.map(p => (p, rs.getObject(p))).toMap
-}

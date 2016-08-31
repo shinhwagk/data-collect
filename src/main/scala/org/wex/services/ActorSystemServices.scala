@@ -19,7 +19,7 @@ object ActorSystemServices {
   val decider: (Logger, String) => Supervision.Decider = (log: Logger, task_name: String) => {
     case ex: Exception => {
       log.error("task: " + task_name + s". Failure. error:${ex.getMessage}")
-      Supervision.Stop
+      Supervision.Resume
     }
   }
 

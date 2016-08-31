@@ -1,15 +1,20 @@
+import NativePackagerHelper._
+
 name := "data-collect"
 
-version := "1.0-alpha-2"
+version := "1.0-alpha-5"
 
 scalaVersion := "2.11.8"
 
 lazy val root = (project in file(".")).enablePlugins(JavaAppPackaging)
 
+mappings in Universal ++= directory("conf")
+
 resolvers ++= Seq("Spray Repository" at "http://dev.rtmsoft.me/nexus/content/groups/public/")
 
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-stream" % "2.4.9",
+  "com.typesafe.akka" %% "akka-http-core" % "2.4.9",
   "com.typesafe.akka" %% "akka-http-spray-json-experimental" % "2.4.9",
   "com.typesafe.akka" %% "akka-slf4j" % "2.4.9",
   "com.wingtech" % "ojdbc" % "7",
