@@ -2,7 +2,7 @@ import NativePackagerHelper._
 
 name := "data-collect"
 
-version := "1.0-alpha-5"
+version := "1.0-alpha-6"
 
 scalaVersion := "2.11.8"
 
