@@ -1,6 +1,6 @@
 package org.wex.services
 
-import java.time.{LocalDate, LocalTime}
+import org.wex.services.Config._
 import scala.io.Source
 
 /**
@@ -8,9 +8,6 @@ import scala.io.Source
   */
 
 object ConfigureServices {
-
-  val cpus = Runtime.getRuntime().availableProcessors()
-
 
   import DataTransformServices._
   import spray.json._
@@ -20,28 +17,32 @@ object ConfigureServices {
   private val _dbsource_conf = s"""${_path_conf}/dbsource.json"""
   private val _collect_conf = s"""${_path_conf}/collect.json"""
 
-  def _conf_collect_list: List[ConfigureCollect] = {
+  def _conf_collect_list: List[CollectConfig] = {
     try {
-      Source.fromFile(_collect_conf).mkString.parseJson.convertTo[List[ConfigureCollect]]
+      Source.fromFile(_collect_conf).mkString.parseJson.convertTo[List[CollectConfig]]
     } catch {
-      case ex: Exception => throw new Exception(_collect_conf + s" configure error: ${ex.getMessage}")
+      case ex: Exception => throw new Exception(_collect_conf + s" collect config error: ${ex.getMessage}")
     }
   }
 
-  def _conf_db_source_list: List[ConfigureDbSource] = {
-    Source.fromFile(_dbsource_conf).mkString.parseJson.convertTo[List[ConfigureDbSource]]
+  def _conf_db_source_list: List[DbSourceConfig] = {
+    try {
+      Source.fromFile(_dbsource_conf).mkString.parseJson.convertTo[List[DbSourceConfig]]
+    } catch {
+      case ex: Exception => throw new Exception(_collect_conf + s" dbsource config error: ${ex.getMessage}")
+    }
   }
 
-  def getSqlTextBySqlFile(name: String): String = Source.fromFile(s"${_sql_file_path_conf}/${name}.sql").mkString
+  def getSqlTextBySqlFile(name: String): String = Source.fromFile(s"${_sql_file_path_conf}/${name}").mkString
 
-  def _generateConfigureRunningBySourcedb(cc: ConfigureCollect): List[ConfigureRunning] = {
-    val targetdb = _conf_db_source_list.filter(db => db.alias == cc.targetdb).head
-    val targetDBSource = DBSource(targetdb.jdbc, targetdb.user, targetdb.password)
+  def _generateConfigureRunningBySourcedb(cc: CollectConfig): List[RunningConfig] = {
+    val targetDb = _conf_db_source_list.filter(db => db.alias == cc.targetdb).head
+    val targetDBSource = DBSource(targetDb.alias,targetDb.jdbc, targetDb.user, targetDb.password)
     val sql = getSqlTextBySqlFile(cc.sqlfile)
     cc.sourcedb match {
       case Nil =>
         _conf_db_source_list.map { db =>
-          ConfigureRunning(cc.name, sql, cc.table, DBSource(db.jdbc, db.user, db.password), targetDBSource)
+          RunningConfig(cc.name, sql, cc.table, DBSource(db.alias, db.jdbc, db.user, db.password), targetDBSource)
         }
       case _ =>
         cc.sourcedb.map { c =>
@@ -49,19 +50,12 @@ object ConfigureServices {
             .filter(_.alias == c)
             .headOption match {
             case None => throw new Exception("db:" + c + " no exist。")
-            case Some(db) => ConfigureRunning(cc.name, sql, cc.table, DBSource(db.jdbc, db.user, db.password), targetDBSource)
+            case Some(db) => RunningConfig(cc.name, sql, cc.table, DBSource(db.alias, db.jdbc, db.user, db.password), targetDBSource)
           }
         }
     }
   }
 }
 
-case class ConfigureDbSource(alias: String, jdbc: String, user: String, password: String)
-
-case class ConfigureCollect(name: String, sqlfile: String, timer: String, table: String, sourcedb: List[String], targetdb: String, status: Int)
-
-case class ConfigureRunning(name: String, sql: String, table: String, sourcedb: DBSource, targetdb: DBSource)
-
-case class DBSource(jdbc: String, user: String, password: String)
 
 

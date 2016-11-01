@@ -1,5 +1,5 @@
 [
-  {"name":"xxx1","sqlfile":"tbs_usage_summary","table": "tbs_usage_summary","timer": "0000-00-00-00-04","sourcedb":[],"targetdb":"target","status":0},
-  {"name":"xxx1","sqlfile":"LOAD_SUMMARY","table": "LOAD_SUMMARY","timer": "0000-00-00-00-04","sourcedb":[],"targetdb":"target","status":0},
-  {"name":"xxx1","sqlfile":"TRANSACTION_SUMMARY","table": "TRANSACTION_SUMMARY","timer": "0000-00-00-00-04","sourcedb":[],"targetdb":"target","status":0}
+  {"name":"xxx1","sqlfile":"tbs_usage_summary.sql","table": "tbs_usage_summary","cron": "0/1 * * ? * *","sourcedb":[],"targetdb":"target","status":0},
+  {"name":"xxx2","sqlfile":"LOAD_SUMMARY.sql","table": "LOAD_SUMMARY","cron": "0/1 * * ? * *","sourcedb":[],"targetdb":"target","status":0},
+  {"name":"xxx3","sqlfile":"TRANSACTION_SUMMARY.sql","table": "TRANSACTION_SUMMARY","cron": "0/2 0-59 0-23 1-31 * ?","sourcedb":[],"targetdb":"target","status":0}
 ]

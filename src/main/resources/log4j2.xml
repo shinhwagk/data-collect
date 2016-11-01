@@ -5,17 +5,20 @@
             <name>errorlog</name>
             <fileName>logs/error.log</fileName>
             <PatternLayout>
-                <pattern>%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
             </PatternLayout>
         </File>
-        <File name="infolog" fileName="logs/info.log">
+        <File name="infolog">
+            <fileName>
+                logs/info.log
+            </fileName>
             <PatternLayout>
-                <pattern>%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
             </PatternLayout>
         </File>
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout>
-                <pattern>%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
             </PatternLayout>
         </Console>
     </Appenders>

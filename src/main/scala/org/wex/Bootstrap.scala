@@ -1,12 +1,15 @@
 package org.wex
 
 import java.sql.Connection
+import java.util.Date
 import akka.stream.ActorAttributes.supervisionStrategy
 import akka.stream.OverflowStrategy
 import akka.stream.Supervision.resumingDecider
 import akka.stream.scaladsl.{Sink, Source}
 import org.apache.logging.log4j.LogManager
-import org.wex.services.{CommonServices, ConfigureRunning, ConfigureServices}
+import org.quartz.CronExpression
+import org.wex.services.Config.RunningConfig
+import org.wex.services._
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
@@ -15,20 +18,22 @@ import scala.util.{Failure, Success}
   * Created by zhangxu on 2016/8/10.
   */
 object Bootstrap extends App {
-
   import org.wex.services.ActorSystemServices._
   import org.wex.services.DatabaseServices._
+  import org.wex.services.SystemConfigure._
 
-  val log = LogManager.getLogger(this.getClass.getName);
+  generatePid()
+
+  val logger = LogManager.getLogger(this.getClass.getName);
 
   def funcResultSetIterator(sourceConn: Connection, sql: String, cols: Seq[String]) = {
     val stmt = sourceConn.createStatement()
     generateQueryIterator(stmt.executeQuery(sql), cols)
   }
 
-  val _LoadTODatabase = (cr: ConfigureRunning) => Future {
-    val sourceConn: Connection = CommonServices.createOracleConnection(cr.sourcedb)
-    val targetConn: Connection = CommonServices.createOracleConnection(cr.targetdb)
+  val _LoadTODatabase = (cr: RunningConfig) => Future {
+    val sourceConn: Connection = DatabaseServices.createConnection(cr.sourceDs)
+    val targetConn: Connection = DatabaseServices.createConnection(cr.targetDs)
 
     val (stmt, cols) = getColumnListBySql(sourceConn, cr.sql)
     stmt.close()
@@ -38,6 +43,8 @@ object Bootstrap extends App {
     val queryIteratorStream = funcResultSetIterator(sourceConn, cr.sql, cols).toStream
 
     val stmt2 = targetConn.prepareStatement(insertSql)
+
+    logger.info(s"exec task: ${cr.name} >> ${cr.sourceDs.alias} -> ${cr.targetDs.alias}, Source data number ${queryIteratorStream.size}")
 
     Source(queryIteratorStream)
       .map { rs =>
@@ -49,33 +56,33 @@ object Bootstrap extends App {
       .runWith(Sink.ignore)
       .onComplete {
         case Success(_) =>
-          closeOracleConnection(sourceConn)
-          closeOracleConnection(targetConn)
-          log.info("task: " + cr.name + ". Success")
+          closeConnection(sourceConn)
+          closeConnection(targetConn)
+          logger.info(s"exec task: ${cr.name} >> ${cr.sourceDs.alias} -> ${cr.targetDs.alias}. Success")
         case Failure(ex) =>
-          closeOracleConnection(sourceConn)
-          closeOracleConnection(targetConn)
-          log.error("task: " + cr.name + s". Failure. error:${ex.getMessage}")
+          closeConnection(sourceConn)
+          closeConnection(targetConn)
+          logger.error(s"exec task: ${cr.name} >> ${cr.sourceDs.alias} -> ${cr.targetDs.alias}. Failure. error:${ex.getMessage}")
       }
   }
 
-  Source.tick(0.seconds, 1.minutes, ())
-    .map { p => log.info("query executable task"); p }
-    .map(_ => ConfigureServices._conf_collect_list).withAttributes(supervisionStrategy(decider2(log)))
+  Source.tick(0.seconds, 1.seconds, ())
+    .map { p => logger.info("query executable task"); p }
+    .map(_ => ConfigureServices._conf_collect_list).withAttributes(supervisionStrategy(decider(logger)))
     .mapConcat(ccl => ccl)
-    .filter(ccl => CommonServices.timerFilter(ccl.timer))
+    .filter(ccl => new CronExpression(ccl.cron).isSatisfiedBy(new Date())).withAttributes(supervisionStrategy(decider(logger)))
     .filter(ccl => ccl.status == 0)
-    .map { ccl => log.info(s"exec task ${ccl.name}"); ccl }
-    .map(ccl => ConfigureServices._generateConfigureRunningBySourcedb(ccl)).withAttributes(supervisionStrategy(decider2(log)))
-    .mapConcat(c => c).async.buffer(20, OverflowStrategy.backpressure)
-    .map { c => log.info(s"exec task ${c.name} on ${c.sourcedb.jdbc}/${c.sourcedb.user} -> ${c.targetdb.jdbc}/${c.targetdb.user}.${c.table} "); c }
-    .mapAsync(ConfigureServices.cpus)(_LoadTODatabase(_)).withAttributes(supervisionStrategy(resumingDecider))
+    .map { ccl => logger.info(s"exec task ${ccl.name}"); ccl }
+    .map(ccl => ConfigureServices._generateConfigureRunningBySourcedb(ccl)).withAttributes(supervisionStrategy(decider(logger)))
+    .mapConcat(c => c).async.buffer(100, OverflowStrategy.backpressure)
+    .map { c => logger.info(s"exec task: ${c.name} >> ${c.sourceDs.alias} -> ${c.targetDs.alias}"); c }
+    .mapAsync(SystemConfigure.cpus)(_LoadTODatabase(_)).withAttributes(supervisionStrategy(decider(logger)))
+//    .withAttributes(supervisionStrategy(resumingDecider))
     .runWith(Sink.ignore)
     .onComplete {
-      case Success(_) => log.info("data collect success")
-      case Failure(ex) => log.error("data collect failure")
+      case Success(_) => logger.info("data collect success")
+      case Failure(ex) => logger.error("data collect failure")
     }
-
 }
 
 

@@ -1,7 +1,7 @@
 package org.wex.services
 
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
+import akka.stream.{ActorMaterializer, Supervision}
 import org.apache.logging.log4j.Logger
 
 /**
@@ -9,21 +9,11 @@ import org.apache.logging.log4j.Logger
   */
 object ActorSystemServices {
 
-
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
-  Class.forName("oracle.jdbc.driver.OracleDriver");
 
-
-  val decider: (Logger, String) => Supervision.Decider = (log: Logger, task_name: String) => {
-    case ex: Exception => {
-      log.error("task: " + task_name + s". Failure. error:${ex.getMessage}")
-      Supervision.Resume
-    }
-  }
-
-  val decider2: (Logger) => Supervision.Decider = (log) => {
+  val decider: (Logger) => Supervision.Decider = (log) => {
     case ex: Exception =>
       log.error(ex.getMessage)
       Supervision.Resume
