@@ -8,10 +8,16 @@
                 <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
             </PatternLayout>
         </File>
-        <File name="infolog">
-            <fileName>
-                logs/info.log
-            </fileName>
+        <File>
+            <name>infolog</name>
+            <fileName>logs/info.log</fileName>
+            <PatternLayout>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
+            </PatternLayout>
+        </File>
+        <File>
+            <name>debuglog</name>
+            <fileName>logs/debug.log</fileName>
             <PatternLayout>
                 <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} --- %msg%n</pattern>
             </PatternLayout>
@@ -26,6 +32,7 @@
         <Root level="debug">
             <AppenderRef ref="errorlog" level="ERROR"/>
             <AppenderRef ref="infolog" level="INFO"/>
+            <AppenderRef ref="debuglog" level="DEBUG"/>
             <AppenderRef ref="Console"/>
         </Root>
     </Loggers>

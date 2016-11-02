@@ -19,7 +19,8 @@ object ConfigureServices {
 
   def _conf_collect_list: List[CollectConfig] = {
     try {
-      Source.fromFile(_collect_conf).mkString.parseJson.convertTo[List[CollectConfig]]
+      val cc: List[CC] = Source.fromFile(_collect_conf).mkString.parseJson.convertTo[List[CC]]
+      cc.map(c => CollectConfig(c.name, c.sqlfile, c.cron, c.table, c.sourcedb, c.targetdb, c.status))
     } catch {
       case ex: Exception => throw new Exception(_collect_conf + s" collect config error: ${ex.getMessage}")
     }
@@ -36,13 +37,14 @@ object ConfigureServices {
   def getSqlTextBySqlFile(name: String): String = Source.fromFile(s"${_sql_file_path_conf}/${name}").mkString
 
   def _generateConfigureRunningBySourcedb(cc: CollectConfig): List[RunningConfig] = {
+    val taskId = cc.id
     val targetDb = _conf_db_source_list.filter(db => db.alias == cc.targetdb).head
-    val targetDBSource = DBSource(targetDb.alias,targetDb.jdbc, targetDb.user, targetDb.password)
+    val targetDBSource = DBSource(targetDb.alias, targetDb.jdbc, targetDb.user, targetDb.password)
     val sql = getSqlTextBySqlFile(cc.sqlfile)
     cc.sourcedb match {
       case Nil =>
         _conf_db_source_list.map { db =>
-          RunningConfig(cc.name, sql, cc.table, DBSource(db.alias, db.jdbc, db.user, db.password), targetDBSource)
+          RunningConfig(taskId, cc.name, sql, cc.table, DBSource(db.alias, db.jdbc, db.user, db.password), targetDBSource)
         }
       case _ =>
         cc.sourcedb.map { c =>
@@ -50,7 +52,7 @@ object ConfigureServices {
             .filter(_.alias == c)
             .headOption match {
             case None => throw new Exception("db:" + c + " no exist。")
-            case Some(db) => RunningConfig(cc.name, sql, cc.table, DBSource(db.alias, db.jdbc, db.user, db.password), targetDBSource)
+            case Some(db) => RunningConfig(taskId, cc.name, sql, cc.table, DBSource(db.alias, db.jdbc, db.user, db.password), targetDBSource)
           }
         }
     }

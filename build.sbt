@@ -2,7 +2,7 @@ import com.typesafe.sbt.SbtNativePackager.autoImport.NativePackagerHelper._
 
 name := "data-collect"
 
-version := "1.0-alpha-9"
+version := "1.0-alpha-10"
 
 scalaVersion := "2.11.8"
 

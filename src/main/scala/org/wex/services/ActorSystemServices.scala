@@ -13,7 +13,7 @@ object ActorSystemServices {
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = system.dispatcher
 
-  val decider: (Logger) => Supervision.Decider = (log) => {
+  def decider(implicit log: Logger): Supervision.Decider = {
     case ex: Exception =>
       log.error(ex.getMessage)
       Supervision.Resume

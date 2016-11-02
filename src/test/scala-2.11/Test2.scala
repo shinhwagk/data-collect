@@ -1,31 +1,44 @@
-//import java.util.{Calendar, Date}
-//
-//import akka.stream.scaladsl.Source
-//import org.quartz.CronExpression
-//import scala.concurrent.duration._
-//import scala.util.Random
-//
-///**
-//  * Created by zhangxu on 2016/8/19.
-//  */
-//object Test2 extends App {
-//
-//  import org.wex.services.ActorSystemServices._
-//
-//  def abc: Seq[Int] = {
-//    val max = new Random().nextInt(10)
-//    println(11111,max)
-//    (1 to max)
-//  }
-//
-////  Source.cycle(() => abc.toIterator).map(p => {
-////    Thread.sleep(1000);
-////    p
-////  }).runForeach(println(_))
-//
-//  Source.tick(0.seconds, 1.seconds, Test2).map(_)
-//  while (true) {
-//    Thread.sleep(1111)
-//  }
-//}
-//
+import akka.actor.ActorSystem
+import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Attributes, OverflowStrategy}
+
+import scala.concurrent.Future
+import scala.concurrent.duration._
+
+
+object Text extends App {
+  implicit val system = ActorSystem()
+  implicit val materializer = ActorMaterializer(
+    //    ActorMaterializerSettings(system)
+    //    .withInputBuffer(
+    //      initialSize = 64,
+    //      maxSize = 128)
+  )
+  implicit val executionContext = system.dispatcher
+
+
+
+  var c = 0
+  Source.tick(0.seconds, 0.1.seconds, ())
+    .map(p => {
+      println(c + 1, "start");
+      c += 1;
+      c
+    })
+    .map(p => {
+      println("          " + c, "zhongqian");
+      c += 1;
+      c
+    })
+    .async.buffer(32,OverflowStrategy.backpressure)
+    .mapAsync(2)(p => Future {
+      println("                        " + p, "zhong");
+      Thread.sleep(100000)
+      p
+    })
+    .map(p => {
+      println(p);
+      p
+    })
+    .runWith(Sink.ignore)
+}
